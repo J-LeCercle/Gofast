@@ -1,0 +1,247 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Private user account profile, wallet balance, check-in state, and withdrawal settings.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "email": { "type": "string", "format": "email", "maxLength": 160 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "inviteCode": { "type": "string", "pattern": "^[A-Z0-9]{4,12}$", "maxLength": 12 },
+        "referredByUid": { "type": "string", "maxLength": 128 },
+        "referredByCode": { "type": "string", "maxLength": 12 },
+        "referredByName": { "type": "string", "maxLength": 80 },
+        "l2SponsorUid": { "type": "string", "maxLength": 128 },
+        "l3SponsorUid": { "type": "string", "maxLength": 128 },
+        "balance": { "type": "number" },
+        "checkInDays": { "type": "number" },
+        "lastCheckInDate": { "type": "string", "maxLength": 16 },
+        "wheelSpins": { "type": "number" },
+        "language": { "type": "string", "enum": ["Français", "English"] },
+        "usedGiftCodes": { "type": "array" },
+        "claimedTiers": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "name", "email", "inviteCode", "balance", "checkInDays", "wheelSpins", "language", "createdAt", "updatedAt"]
+    },
+    "ReferralCode": {
+      "title": "ReferralCode",
+      "description": "Public referral code index linking a code to its owner UID and upstream sponsor chain without PII.",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "pattern": "^[A-Z0-9]{4,12}$", "maxLength": 12 },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "ownerName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "l1SponsorUid": { "type": "string", "maxLength": 128 },
+        "l2SponsorUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["code", "ownerUid", "ownerName", "createdAt"]
+    },
+    "TeamMember": {
+      "title": "TeamMember",
+      "description": "Downline member entry inside a sponsor's team tree.",
+      "type": "object",
+      "properties": {
+        "memberUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "sponsorUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "memberName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "level": { "type": "number" },
+        "investedAmount": { "type": "number" },
+        "commissionEarned": { "type": "number" },
+        "joinedAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["memberUid", "sponsorUid", "memberName", "level", "investedAmount", "commissionEarned", "joinedAt", "updatedAt"]
+    },
+    "Commission": {
+      "title": "Commission",
+      "description": "Commission earned by a sponsor when a downline member launches a production line.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "sponsorUid": { "type": "string", "maxLength": 128 },
+        "fromMemberUid": { "type": "string", "maxLength": 128 },
+        "fromMemberName": { "type": "string", "maxLength": 80 },
+        "level": { "type": "number" },
+        "lineName": { "type": "string", "maxLength": 80 },
+        "linePrice": { "type": "number" },
+        "amount": { "type": "number" },
+        "claimed": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "sponsorUid", "fromMemberUid", "fromMemberName", "level", "lineName", "linePrice", "amount", "claimed", "createdAt"]
+    },
+    "ActiveLine": {
+      "title": "ActiveLine",
+      "description": "Production line launched by a user.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "planId": { "type": "string", "maxLength": 32 },
+        "planCode": { "type": "string", "maxLength": 32 },
+        "name": { "type": "string", "maxLength": 80 },
+        "categoryLabel": { "type": "string", "maxLength": 80 },
+        "price": { "type": "number" },
+        "dailyIncome": { "type": "number" },
+        "durationDays": { "type": "number" },
+        "daysElapsed": { "type": "number" },
+        "totalEarned": { "type": "number" },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "lastClaimedAt": { "type": "string", "maxLength": 16 },
+        "status": { "type": "string", "enum": ["active", "completed"] }
+      },
+      "required": ["id", "userId", "planId", "planCode", "name", "categoryLabel", "price", "dailyIncome", "durationDays", "daysElapsed", "totalEarned", "startedAt", "status"]
+    },
+    "Deposit": {
+      "title": "Deposit",
+      "description": "Deposit transaction record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "amount": { "type": "number" },
+        "method": { "type": "string", "maxLength": 80 },
+        "status": { "type": "string", "enum": ["Succès", "En cours", "Échoué"] },
+        "reference": { "type": "string", "maxLength": 40 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "amount", "method", "status", "reference", "createdAt"]
+    },
+    "Withdrawal": {
+      "title": "Withdrawal",
+      "description": "Withdrawal request record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "grossAmount": { "type": "number" },
+        "feeAmount": { "type": "number" },
+        "netAmount": { "type": "number" },
+        "operator": { "type": "string", "maxLength": 80 },
+        "accountNumber": { "type": "string", "maxLength": 64 },
+        "status": { "type": "string", "enum": ["En attente", "Validé"] },
+        "reference": { "type": "string", "maxLength": 40 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "grossAmount", "feeAmount", "netAmount", "operator", "accountNumber", "status", "reference", "createdAt"]
+    },
+    "FundTransaction": {
+      "title": "FundTransaction",
+      "description": "Wallet ledger movement entry.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string", "enum": ["credit", "debit"] },
+        "category": { "type": "string", "maxLength": 32 },
+        "label": { "type": "string", "maxLength": 160 },
+        "amount": { "type": "number" },
+        "balanceAfter": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "type", "category", "label", "amount", "balanceAfter", "createdAt"]
+    },
+    "NotificationMessage": {
+      "title": "NotificationMessage",
+      "description": "User message center notification.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "senderUid": { "type": "string", "maxLength": 128 },
+        "category": { "type": "string", "enum": ["system", "info", "earnings", "referral"] },
+        "title": { "type": "string", "maxLength": 120 },
+        "body": { "type": "string", "maxLength": 500 },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "senderUid", "category", "title", "body", "read", "createdAt"]
+    },
+    "SupportChatMessage": {
+      "title": "SupportChatMessage",
+      "description": "Support chat entry between user and support advisor.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "sender": { "type": "string", "enum": ["user", "agent"] },
+        "text": { "type": "string", "maxLength": 1000 },
+        "timestamp": { "type": "string", "maxLength": 16 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "sender", "text", "timestamp", "createdAt"]
+    },
+    "FlowEvent": {
+      "title": "FlowEvent",
+      "description": "Real-time platform activity event stream for admin monitoring.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "userName": { "type": "string", "maxLength": 80 },
+        "userEmail": { "type": "string", "maxLength": 160 },
+        "eventType": { "type": "string", "enum": ["signup", "deposit", "withdrawal", "line", "yield", "commission", "referral", "bonus"] },
+        "title": { "type": "string", "maxLength": 120 },
+        "detail": { "type": "string", "maxLength": 240 },
+        "amount": { "type": "number" },
+        "direction": { "type": "string", "enum": ["in", "out", "neutral"] },
+        "status": { "type": "string", "maxLength": 32 },
+        "reference": { "type": "string", "maxLength": 64 },
+        "targetDocId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "userName", "userEmail", "eventType", "title", "detail", "amount", "direction", "status", "reference", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Private user profile and wallet state."
+    },
+    "/referralCodes/{code}": {
+      "schema": { "$ref": "#/entities/ReferralCode" },
+      "description": "Public referral lookup table mapping codes to owner UID and upstream sponsors."
+    },
+    "/users/{userId}/teamMembers/{memberUid}": {
+      "schema": { "$ref": "#/entities/TeamMember" },
+      "description": "Downline members (L1, L2, L3) belonging to a sponsor."
+    },
+    "/users/{userId}/commissions/{commissionId}": {
+      "schema": { "$ref": "#/entities/Commission" },
+      "description": "Commissions credited by downline activity."
+    },
+    "/users/{userId}/lines/{lineId}": {
+      "schema": { "$ref": "#/entities/ActiveLine" },
+      "description": "Active and completed production lines owned by user."
+    },
+    "/users/{userId}/deposits/{depositId}": {
+      "schema": { "$ref": "#/entities/Deposit" },
+      "description": "User deposit history."
+    },
+    "/users/{userId}/withdrawals/{withdrawalId}": {
+      "schema": { "$ref": "#/entities/Withdrawal" },
+      "description": "User withdrawal history."
+    },
+    "/users/{userId}/transactions/{txId}": {
+      "schema": { "$ref": "#/entities/FundTransaction" },
+      "description": "User wallet fund ledger."
+    },
+    "/users/{userId}/notifications/{notifId}": {
+      "schema": { "$ref": "#/entities/NotificationMessage" },
+      "description": "User message center notifications."
+    },
+    "/users/{userId}/supportMessages/{msgId}": {
+      "schema": { "$ref": "#/entities/SupportChatMessage" },
+      "description": "User support chat messages."
+    },
+    "/flows/{flowId}": {
+      "schema": { "$ref": "#/entities/FlowEvent" },
+      "description": "Real-time platform event stream readable only by the verified administrator."
+    }
+  }
+}

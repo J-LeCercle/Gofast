@@ -1,0 +1,6 @@
+{
+  "name": "GoFast",
+  "description": "Plateforme GoFast de lignes de production, suivi de rendement quotidien et gestion de portefeuille en design bleu noir.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

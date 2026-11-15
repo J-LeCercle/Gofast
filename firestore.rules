@@ -1,0 +1,478 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email_verified == true && request.auth.token.email == 'allymika07@gmail.com') ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidCode(code) {
+      return code is string && code.size() >= 4 && code.size() <= 12 && code.matches('^[A-Z0-9]+$');
+    }
+
+    function isValidWithdrawalAccount(acc) {
+      return acc == null || (
+        acc is map &&
+        acc.keys().hasAll(['holderName', 'operator', 'accountNumber']) &&
+        acc.keys().hasOnly(['holderName', 'operator', 'accountNumber']) &&
+        acc.holderName is string && acc.holderName.size() >= 1 && acc.holderName.size() <= 80 &&
+        acc.operator is string && acc.operator.size() >= 1 && acc.operator.size() <= 80 &&
+        acc.accountNumber is string && acc.accountNumber.size() >= 1 && acc.accountNumber.size() <= 64
+      );
+    }
+
+    function isValidUser(data, userId) {
+      return data.keys().hasAll([
+        'uid', 'name', 'email', 'phone', 'inviteCode',
+        'balance', 'checkInDays', 'wheelSpins', 'language',
+        'usedGiftCodes', 'claimedTiers', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'uid', 'name', 'email', 'phone', 'inviteCode',
+        'referredByUid', 'referredByCode', 'referredByName',
+        'l2SponsorUid', 'l3SponsorUid',
+        'balance', 'checkInDays', 'lastCheckInDate', 'wheelSpins',
+        'language', 'withdrawalAccount', 'usedGiftCodes', 'claimedTiers',
+        'createdAt', 'updatedAt'
+      ]) &&
+      data.uid == userId &&
+      data.name is string && data.name.size() >= 1 && data.name.size() <= 80 &&
+      data.email is string && data.email.size() <= 160 &&
+      data.phone is string && data.phone.size() <= 32 &&
+      isValidCode(data.inviteCode) &&
+      (!('referredByUid' in data) || data.referredByUid == null || (data.referredByUid is string && data.referredByUid.size() <= 128)) &&
+      (!('referredByCode' in data) || data.referredByCode == null || isValidCode(data.referredByCode)) &&
+      (!('referredByName' in data) || data.referredByName == null || (data.referredByName is string && data.referredByName.size() <= 80)) &&
+      (!('l2SponsorUid' in data) || data.l2SponsorUid == null || (data.l2SponsorUid is string && data.l2SponsorUid.size() <= 128)) &&
+      (!('l3SponsorUid' in data) || data.l3SponsorUid == null || (data.l3SponsorUid is string && data.l3SponsorUid.size() <= 128)) &&
+      data.balance is number && data.balance >= 0 && data.balance <= 1000000000 &&
+      data.checkInDays is int && data.checkInDays >= 0 && data.checkInDays <= 10000 &&
+      (!('lastCheckInDate' in data) || data.lastCheckInDate == null || (data.lastCheckInDate is string && data.lastCheckInDate.size() <= 16)) &&
+      data.wheelSpins is int && data.wheelSpins >= 0 && data.wheelSpins <= 1000 &&
+      data.language in ['Français', 'English'] &&
+      (!('withdrawalAccount' in data) || isValidWithdrawalAccount(data.withdrawalAccount)) &&
+      data.usedGiftCodes is list && data.usedGiftCodes.size() <= 20 &&
+      (data.usedGiftCodes.size() == 0 || data.usedGiftCodes[0] is string) &&
+      data.claimedTiers is list && data.claimedTiers.size() <= 8 &&
+      (data.claimedTiers.size() == 0 || data.claimedTiers[0] is int) &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidReferralCodeDoc(data, code) {
+      return data.keys().hasAll(['code', 'ownerUid', 'ownerName', 'createdAt']) &&
+      data.keys().hasOnly(['code', 'ownerUid', 'ownerName', 'l1SponsorUid', 'l2SponsorUid', 'createdAt']) &&
+      isValidCode(code) &&
+      data.code == code &&
+      data.ownerUid is string && data.ownerUid.size() >= 1 && data.ownerUid.size() <= 128 &&
+      data.ownerName is string && data.ownerName.size() >= 1 && data.ownerName.size() <= 80 &&
+      (!('l1SponsorUid' in data) || data.l1SponsorUid == null || (data.l1SponsorUid is string && data.l1SponsorUid.size() <= 128)) &&
+      (!('l2SponsorUid' in data) || data.l2SponsorUid == null || (data.l2SponsorUid is string && data.l2SponsorUid.size() <= 128)) &&
+      data.createdAt is timestamp;
+    }
+
+    function isValidTeamMember(data, sponsorUid, memberUid) {
+      return data.keys().hasAll([
+        'memberUid', 'sponsorUid', 'memberName', 'level',
+        'investedAmount', 'commissionEarned', 'joinedAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'memberUid', 'sponsorUid', 'memberName', 'level',
+        'investedAmount', 'commissionEarned', 'joinedAt', 'updatedAt'
+      ]) &&
+      data.memberUid == memberUid &&
+      data.sponsorUid == sponsorUid &&
+      data.memberName is string && data.memberName.size() >= 1 && data.memberName.size() <= 80 &&
+      data.level in [1, 2, 3] &&
+      data.investedAmount is number && data.investedAmount >= 0 &&
+      data.commissionEarned is number && data.commissionEarned >= 0 &&
+      data.joinedAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidCommission(data, sponsorUid, commissionId) {
+      return data.keys().hasAll([
+        'id', 'sponsorUid', 'fromMemberUid', 'fromMemberName',
+        'level', 'lineName', 'linePrice', 'amount', 'claimed', 'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'id', 'sponsorUid', 'fromMemberUid', 'fromMemberName',
+        'level', 'lineName', 'linePrice', 'amount', 'claimed', 'createdAt'
+      ]) &&
+      data.id == commissionId &&
+      data.sponsorUid == sponsorUid &&
+      data.fromMemberUid is string && data.fromMemberUid.size() >= 1 && data.fromMemberUid.size() <= 128 &&
+      data.fromMemberName is string && data.fromMemberName.size() >= 1 && data.fromMemberName.size() <= 80 &&
+      data.level in [1, 2, 3] &&
+      data.lineName is string && data.lineName.size() >= 1 && data.lineName.size() <= 80 &&
+      data.linePrice is number && data.linePrice > 0 &&
+      data.amount is number && data.amount > 0 &&
+      data.claimed is bool &&
+      data.createdAt is timestamp;
+    }
+
+    function isValidActiveLine(data, userId, lineId) {
+      return data.keys().hasAll([
+        'id', 'userId', 'planId', 'planCode', 'name', 'categoryLabel',
+        'price', 'dailyIncome', 'durationDays', 'daysElapsed', 'totalEarned',
+        'startedAt', 'status'
+      ]) &&
+      data.keys().hasOnly([
+        'id', 'userId', 'planId', 'planCode', 'name', 'categoryLabel',
+        'price', 'dailyIncome', 'durationDays', 'daysElapsed', 'totalEarned',
+        'startedAt', 'lastClaimedAt', 'status'
+      ]) &&
+      data.id == lineId &&
+      data.userId == userId &&
+      data.planId is string && data.planId.size() <= 32 &&
+      data.planCode is string && data.planCode.size() <= 32 &&
+      data.name is string && data.name.size() >= 1 && data.name.size() <= 80 &&
+      data.categoryLabel is string && data.categoryLabel.size() <= 80 &&
+      data.price is number && data.price > 0 &&
+      data.dailyIncome is number && data.dailyIncome > 0 &&
+      data.durationDays is int && data.durationDays > 0 && data.durationDays <= 365 &&
+      data.daysElapsed is int && data.daysElapsed >= 0 && data.daysElapsed <= data.durationDays &&
+      data.totalEarned is number && data.totalEarned >= 0 &&
+      data.startedAt is timestamp &&
+      (!('lastClaimedAt' in data) || data.lastClaimedAt == null || (data.lastClaimedAt is string && data.lastClaimedAt.size() <= 16)) &&
+      data.status in ['active', 'completed'];
+    }
+
+    function isValidDeposit(data, userId, depositId) {
+      return data.keys().hasAll(['id', 'userId', 'amount', 'method', 'status', 'reference', 'createdAt']) &&
+      data.keys().hasOnly(['id', 'userId', 'amount', 'method', 'status', 'reference', 'createdAt']) &&
+      data.id == depositId &&
+      data.userId == userId &&
+      data.amount is number && data.amount >= 4000 && data.amount <= 100000 &&
+      data.method is string && data.method.size() >= 1 && data.method.size() <= 80 &&
+      data.status in ['Succès', 'En cours', 'Échoué'] &&
+      data.reference is string && data.reference.size() <= 40 &&
+      data.createdAt is timestamp;
+    }
+
+    function isValidWithdrawal(data, userId, withdrawalId) {
+      return data.keys().hasAll([
+        'id', 'userId', 'grossAmount', 'feeAmount', 'netAmount',
+        'operator', 'accountNumber', 'status', 'reference', 'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'id', 'userId', 'grossAmount', 'feeAmount', 'netAmount',
+        'operator', 'accountNumber', 'status', 'reference', 'createdAt'
+      ]) &&
+      data.id == withdrawalId &&
+      data.userId == userId &&
+      data.grossAmount is number && data.grossAmount >= 1500 && data.grossAmount <= 1000000 &&
+      data.feeAmount is number && data.feeAmount >= 0 &&
+      data.netAmount is number && data.netAmount > 0 &&
+      data.operator is string && data.operator.size() >= 1 && data.operator.size() <= 80 &&
+      data.accountNumber is string && data.accountNumber.size() >= 1 && data.accountNumber.size() <= 64 &&
+      data.status in ['En attente', 'Validé'] &&
+      data.reference is string && data.reference.size() <= 40 &&
+      data.createdAt is timestamp;
+    }
+
+    function isValidTransaction(data, userId, txId) {
+      return data.keys().hasAll(['id', 'userId', 'type', 'category', 'label', 'amount', 'balanceAfter', 'createdAt']) &&
+      data.keys().hasOnly(['id', 'userId', 'type', 'category', 'label', 'amount', 'balanceAfter', 'createdAt']) &&
+      data.id == txId &&
+      data.userId == userId &&
+      data.type in ['credit', 'debit'] &&
+      data.category is string && data.category.size() >= 1 && data.category.size() <= 32 &&
+      data.label is string && data.label.size() >= 1 && data.label.size() <= 160 &&
+      data.amount is number && data.amount > 0 &&
+      data.balanceAfter is number && data.balanceAfter >= 0 &&
+      data.createdAt is timestamp;
+    }
+
+    function isValidNotification(data, userId, notifId) {
+      return data.keys().hasAll(['id', 'userId', 'senderUid', 'category', 'title', 'body', 'read', 'createdAt']) &&
+      data.keys().hasOnly(['id', 'userId', 'senderUid', 'category', 'title', 'body', 'read', 'createdAt']) &&
+      data.id == notifId &&
+      data.userId == userId &&
+      data.senderUid is string && data.senderUid.size() >= 1 && data.senderUid.size() <= 128 &&
+      data.category in ['system', 'info', 'earnings', 'referral'] &&
+      data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+      data.body is string && data.body.size() >= 1 && data.body.size() <= 500 &&
+      data.read is bool &&
+      data.createdAt is timestamp;
+    }
+
+    function isValidSupportMessage(data, userId, msgId) {
+      return data.keys().hasAll(['id', 'userId', 'sender', 'text', 'timestamp', 'createdAt']) &&
+      data.keys().hasOnly(['id', 'userId', 'sender', 'text', 'timestamp', 'createdAt']) &&
+      data.id == msgId &&
+      data.userId == userId &&
+      data.sender in ['user', 'agent'] &&
+      data.text is string && data.text.size() >= 1 && data.text.size() <= 1000 &&
+      data.timestamp is string && data.timestamp.size() <= 16 &&
+      data.createdAt is timestamp;
+    }
+
+    function isValidFlowEvent(data, flowId) {
+      return data.keys().hasAll([
+        'id', 'userId', 'userName', 'userEmail', 'eventType',
+        'title', 'detail', 'amount', 'direction', 'status', 'reference', 'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'id', 'userId', 'userName', 'userEmail', 'eventType',
+        'title', 'detail', 'amount', 'direction', 'status', 'reference', 'targetDocId', 'createdAt'
+      ]) &&
+      data.id == flowId &&
+      data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+      data.userName is string && data.userName.size() >= 1 && data.userName.size() <= 80 &&
+      data.userEmail is string && data.userEmail.size() <= 160 &&
+      data.eventType in ['signup', 'deposit', 'withdrawal', 'line', 'yield', 'commission', 'referral', 'bonus'] &&
+      data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+      data.detail is string && data.detail.size() >= 1 && data.detail.size() <= 240 &&
+      data.amount is number && data.amount >= 0 &&
+      data.direction in ['in', 'out', 'neutral'] &&
+      data.status is string && data.status.size() >= 1 && data.status.size() <= 32 &&
+      data.reference is string && data.reference.size() <= 64 &&
+      (!('targetDocId' in data) || data.targetDocId == null || (data.targetDocId is string && data.targetDocId.size() <= 128)) &&
+      data.createdAt is timestamp;
+    }
+
+    match /admins/{adminUid} {
+      allow get: if isValidId(adminUid) && (isOwner(adminUid) || isAdmin());
+      allow list, write: if false;
+    }
+
+    match /flows/{flowId} {
+      allow get: if isValidId(flowId) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(flowId) &&
+        isSignedIn() &&
+        isValidFlowEvent(incoming(), flowId) &&
+        incoming().userId == request.auth.uid &&
+        incoming().createdAt == request.time;
+      allow update: if isValidId(flowId) &&
+        isAdmin() &&
+        isValidFlowEvent(incoming(), flowId) &&
+        incoming().id == existing().id &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status']);
+      allow delete: if false;
+    }
+
+    match /referralCodes/{code} {
+      allow get: if isValidCode(code);
+      allow list: if false;
+      allow create: if isSignedIn() &&
+        isValidCode(code) &&
+        isValidReferralCodeDoc(incoming(), code) &&
+        incoming().ownerUid == request.auth.uid &&
+        incoming().createdAt == request.time;
+      allow update: if isSignedIn() &&
+        isValidCode(code) &&
+        isValidReferralCodeDoc(incoming(), code) &&
+        existing().ownerUid == request.auth.uid &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().code == existing().code &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['ownerName', 'l1SponsorUid', 'l2SponsorUid']);
+      allow delete: if false;
+    }
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(userId) &&
+        isOwner(userId) &&
+        isValidUser(incoming(), userId) &&
+        incoming().balance == 800 &&
+        incoming().wheelSpins == 1 &&
+        incoming().checkInDays == 0 &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(userId) &&
+        isOwner(userId) &&
+        isValidUser(incoming(), userId) &&
+        incoming().uid == existing().uid &&
+        incoming().inviteCode == existing().inviteCode &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'language', 'updatedAt']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['withdrawalAccount', 'updatedAt']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['balance', 'checkInDays', 'lastCheckInDate', 'updatedAt']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['balance', 'wheelSpins', 'updatedAt']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['balance', 'usedGiftCodes', 'updatedAt']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['balance', 'claimedTiers', 'updatedAt']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['balance', 'updatedAt']) ||
+          ((!('referredByUid' in existing()) || existing().referredByUid == null) &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['referredByUid', 'referredByCode', 'referredByName', 'l2SponsorUid', 'l3SponsorUid', 'updatedAt']))
+        );
+      allow delete: if false;
+
+      match /teamMembers/{memberUid} {
+        allow get: if isValidId(userId) && isValidId(memberUid) && (isOwner(userId) || request.auth.uid == memberUid);
+        allow list: if isOwner(userId) && resource.data.sponsorUid == userId;
+        allow create: if isValidId(userId) &&
+          isValidId(memberUid) &&
+          isSignedIn() &&
+          request.auth.uid == memberUid &&
+          isValidTeamMember(incoming(), userId, memberUid) &&
+          incoming().investedAmount == 0 &&
+          incoming().commissionEarned == 0 &&
+          incoming().joinedAt == request.time &&
+          incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) &&
+          isValidId(memberUid) &&
+          isSignedIn() &&
+          request.auth.uid == memberUid &&
+          isValidTeamMember(incoming(), userId, memberUid) &&
+          incoming().memberUid == existing().memberUid &&
+          incoming().sponsorUid == existing().sponsorUid &&
+          incoming().level == existing().level &&
+          incoming().joinedAt == existing().joinedAt &&
+          incoming().updatedAt == request.time &&
+          incoming().investedAmount >= existing().investedAmount &&
+          incoming().commissionEarned >= existing().commissionEarned &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['investedAmount', 'commissionEarned', 'updatedAt']);
+        allow delete: if false;
+      }
+
+      match /commissions/{commissionId} {
+        allow get: if isValidId(userId) && isValidId(commissionId) && isOwner(userId);
+        allow list: if isOwner(userId) && resource.data.sponsorUid == userId;
+        allow create: if isValidId(userId) &&
+          isValidId(commissionId) &&
+          isSignedIn() &&
+          isValidCommission(incoming(), userId, commissionId) &&
+          incoming().fromMemberUid == request.auth.uid &&
+          incoming().claimed == false &&
+          incoming().createdAt == request.time;
+        allow update: if isValidId(userId) &&
+          isValidId(commissionId) &&
+          isOwner(userId) &&
+          isValidCommission(incoming(), userId, commissionId) &&
+          existing().claimed == false &&
+          incoming().claimed == true &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['claimed']);
+        allow delete: if false;
+      }
+
+      match /lines/{lineId} {
+        allow get: if isValidId(userId) && isValidId(lineId) && isOwner(userId);
+        allow list: if isOwner(userId) && resource.data.userId == userId;
+        allow create: if isValidId(userId) &&
+          isValidId(lineId) &&
+          isOwner(userId) &&
+          isValidActiveLine(incoming(), userId, lineId) &&
+          incoming().daysElapsed == 0 &&
+          incoming().totalEarned == 0 &&
+          incoming().status == 'active' &&
+          incoming().startedAt == request.time;
+        allow update: if isValidId(userId) &&
+          isValidId(lineId) &&
+          isOwner(userId) &&
+          existing().status == 'active' &&
+          isValidActiveLine(incoming(), userId, lineId) &&
+          incoming().id == existing().id &&
+          incoming().userId == existing().userId &&
+          incoming().startedAt == existing().startedAt &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['daysElapsed', 'totalEarned', 'lastClaimedAt', 'status']);
+        allow delete: if false;
+      }
+
+      match /deposits/{depositId} {
+        allow get: if isValidId(userId) && isValidId(depositId) && (isOwner(userId) || isAdmin());
+        allow list: if (isOwner(userId) && resource.data.userId == userId) || isAdmin();
+        allow create: if isValidId(userId) &&
+          isValidId(depositId) &&
+          isOwner(userId) &&
+          isValidDeposit(incoming(), userId, depositId) &&
+          incoming().createdAt == request.time;
+        allow update, delete: if false;
+      }
+
+      match /withdrawals/{withdrawalId} {
+        allow get: if isValidId(userId) && isValidId(withdrawalId) && (isOwner(userId) || isAdmin());
+        allow list: if (isOwner(userId) && resource.data.userId == userId) || isAdmin();
+        allow create: if isValidId(userId) &&
+          isValidId(withdrawalId) &&
+          isOwner(userId) &&
+          isValidWithdrawal(incoming(), userId, withdrawalId) &&
+          incoming().createdAt == request.time;
+        allow update: if isValidId(userId) &&
+          isValidId(withdrawalId) &&
+          isAdmin() &&
+          isValidWithdrawal(incoming(), userId, withdrawalId) &&
+          existing().status == 'En attente' &&
+          incoming().status == 'Validé' &&
+          incoming().id == existing().id &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['status']);
+        allow delete: if false;
+      }
+
+      match /transactions/{txId} {
+        allow get: if isValidId(userId) && isValidId(txId) && isOwner(userId);
+        allow list: if isOwner(userId) && resource.data.userId == userId;
+        allow create: if isValidId(userId) &&
+          isValidId(txId) &&
+          isOwner(userId) &&
+          isValidTransaction(incoming(), userId, txId) &&
+          incoming().createdAt == request.time;
+        allow update, delete: if false;
+      }
+
+      match /notifications/{notifId} {
+        allow get: if isValidId(userId) && isValidId(notifId) && isOwner(userId);
+        allow list: if isOwner(userId) && resource.data.userId == userId;
+        allow create: if isValidId(userId) &&
+          isValidId(notifId) &&
+          isSignedIn() &&
+          isValidNotification(incoming(), userId, notifId) &&
+          incoming().senderUid == request.auth.uid &&
+          incoming().read == false &&
+          incoming().createdAt == request.time;
+        allow update: if isValidId(userId) &&
+          isValidId(notifId) &&
+          isOwner(userId) &&
+          isValidNotification(incoming(), userId, notifId) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+        allow delete: if false;
+      }
+
+      match /supportMessages/{msgId} {
+        allow get: if isValidId(userId) && isValidId(msgId) && isOwner(userId);
+        allow list: if isOwner(userId) && resource.data.userId == userId;
+        allow create: if isValidId(userId) &&
+          isValidId(msgId) &&
+          isOwner(userId) &&
+          isValidSupportMessage(incoming(), userId, msgId) &&
+          incoming().createdAt == request.time;
+        allow update, delete: if false;
+      }
+    }
+  }
+}
